@@ -1,0 +1,32 @@
+{
+    "chords_host": "wx.myhost.com",
+    "api_email": "myemail@gmail.com",
+    "api_key": "XXXXXXXXXXXXXXXXX",
+    "instrument_id": "12345",
+    "variables": [
+        {
+            "short_name": "home_energy",
+            "column_name": "Home Usage (kWh)"
+        },
+        {
+            "short_name": "solar_energy",
+            "column_name": "Solar Production (kWh)"
+        },
+        {
+            "short_name": "grid_energy",
+            "column_name": "Net Grid Energy(kWh)"
+        },
+        {
+            "short_name": "home_power",
+            "column_name": "Home Usage (kW)"
+        },
+        {
+            "short_name": "solar_power",
+            "column_name": "Solar Production (kW)"
+        },
+        {
+            "short_name": "grid_power",
+            "column_name": "Net Grid Power(kW)"
+        }
+    ]
+}

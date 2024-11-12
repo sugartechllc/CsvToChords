@@ -1,0 +1,3 @@
+[submodule "pychords"]
+	path = pychords
+	url = git@github.com:sugartechllc/pychords.git
