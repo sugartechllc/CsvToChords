@@ -48,9 +48,9 @@ def stringToUnixTimestamp(datetimeString, year, tzinfo):
         raise e
 
 
-def readSunpowerReport(data_filepath, year=datetime.datetime.now().year, tzinfo=zoneinfo.ZoneInfo('US/Pacific')):
+def readDataFile(config, data_filepath, year=datetime.datetime.now().year, tzinfo=zoneinfo.ZoneInfo('US/Pacific')):
     """
-    Read a sunpower xlsx file into a pandas data frame and convert timestamps into unix timestamps.
+    Read a csv or xlsx file into a pandas data frame and convert timestamps into unix timestamps.
     """
 
     # Make sure the file exists
@@ -60,17 +60,21 @@ def readSunpowerReport(data_filepath, year=datetime.datetime.now().year, tzinfo=
 
     # Parse the file
     logging.info(f"Parsing {data_filepath}")
-    dataframe = pandas.read_excel(data_filepath)
-    if dataframe is None:
-        logging.error(f"Failed to parse {data_filepath}")
-        return None
+    try:
+        dataframe = pandas.read_excel(data_filepath)
+    except ValueError as e:
+        try:
+            dataframe = pandas.read_csv(data_filepath, delimiter=config["delimiter"])
+        except Exception as e:
+            logging.error(f"Failed to parse {data_filepath} as CSV or XLSX file: {e}")
+            return None
 
-    # Convert period to a unix timestamp
-    if dataframe["Period"] is None:
+    # Convert time_column_name to a unix timestamp
+    if config["time_column_name"] not in dataframe:
         logging.error(
-            f"{data_filepath} is does not contain a Period column, can not parse")
+            f"{data_filepath} does not contain a \"{config['time_column_name']}\" column, can not parse")
         return None
-    dataframe["Unix Timestamp"] = dataframe["Period"].apply(
+    dataframe["Unix Timestamp"] = dataframe[config["time_column_name"]].apply(
         stringToUnixTimestamp, args=(year, tzinfo,))
 
     return dataframe
@@ -78,11 +82,11 @@ def readSunpowerReport(data_filepath, year=datetime.datetime.now().year, tzinfo=
 
 def handleFile(config, file):
     """
-    Handle a sunpower xlsx report file and send to chords.
+    Handle a csv or xlsx file and send to chords.
     """
 
-    # Parse the sunpower xlsx into a dataframe
-    df = readSunpowerReport(file)
+    # Parse the file into a dataframe
+    df = readDataFile(config, file)
     if df is None:
         logging.error(f"Failed to parse {file}")
         sys.exit(-1)
@@ -98,23 +102,21 @@ def handleFile(config, file):
         df_row = df.loc[i]
         vars = {}
 
-        # Make sure period exists
-        if 'Period' not in df_row:
-            logging.error(f"No period for row {i}")
+        # Make sure time exists
+        if config["time_column_name"] not in df_row:
+            logging.error(f"No time for row {i}")
             continue
 
         # Create the time stamp
-        if 'Unix Timestamp' not in df_row:
-            logging.error(f"No unix timestamp for row {i}")
-            continue
-        vars['at'] = int(df_row['Unix Timestamp'])
+        vars['at'] = df_row[config["time_column_name"]]
 
         # Collect the vars
         for (short_name, column_name) in zip(short_names, column_names):
             if column_name not in df_row:
                 logging.debug(f"Skipping unrecognized column {short_name}, {column_name}")
                 continue
-            vars[short_name] = df_row[column_name]
+            if pandas.notna(df_row[column_name]):
+                vars[short_name] = df_row[column_name]
 
         # Send to CHORDS
         sendData(config=config, vars=vars)
@@ -136,19 +138,22 @@ def sendData(config: dict, vars: dict) -> None:
     chords_record["vars"] = vars
     uri = tochords.buildURI(config["chords_host"], chords_record)
     logging.info(f"Submitting: {uri}")
-    max_queue_length = 31*60*24
-    tochords.submitURI(uri, max_queue_length)
-    time.sleep(0.2)
+    max_queue_length = config.get("max_queue_length", 31*60*24)
+    if not config["test"]:
+        tochords.submitURI(uri, max_queue_length)
+    time.sleep(config["sleep_secs"])
 
 
-def main(files: list, config_file: str):
+def main(files: list, config_file: str, test_mode: bool):
 
     # Load configuration
-    logging.info(f"Starting SunPower to Chords with {config_file}")
+    logging.info(f"Starting CsvToChords to Chords with {config_file}")
     config = json.loads(open(config_file).read())
+    config["test"] = test_mode
 
     # Startup chords sender
-    tochords.startSender()
+    if not config["test"]:
+        tochords.startSender()
 
     # Parse each csv file
     for file in files:
@@ -173,6 +178,8 @@ if __name__ == '__main__':
     parser.add_argument(
         "-c", "--config", help="Path to json configuration file to use.", required=True)
     parser.add_argument(
+        "-t", "--test", help="Run in test mode", action="store_true", default=False)
+    parser.add_argument(
         "--debug", help="Enable debug logging",
         action="store_true")
     args = parser.parse_args()
@@ -186,4 +193,4 @@ if __name__ == '__main__':
     logging.debug("Debug logging enabled")
 
     # Run main
-    main(args.files, args.config)
+    main(args.files, args.config, args.test)

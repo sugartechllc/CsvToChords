@@ -3,6 +3,9 @@
     "api_email": "myemail@gmail.com",
     "api_key": "XXXXXXXXXXXXXXXXX",
     "instrument_id": "12345",
+    "time_column_name": "Time",
+    "delimiter": ",",
+    "sleep_secs": 0.5,
     "variables": [
         {
             "short_name": "home_energy",
