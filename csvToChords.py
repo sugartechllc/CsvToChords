@@ -57,7 +57,7 @@ def readDataFile(config, data_filepath, year=datetime.datetime.now().year, tzinf
     if os.path.exists(data_filepath) == False:
         logging.error(f"{data_filepath} does not exist.")
         return None
-
+    
     # Parse the file
     logging.info(f"Parsing {data_filepath}")
     try:
@@ -138,8 +138,11 @@ def sendData(config: dict, vars: dict) -> None:
     chords_record["vars"] = vars
     uri = tochords.buildURI(config["chords_host"], chords_record)
     logging.info(f"Submitting: {uri}")
-    max_queue_length = config.get("max_queue_length", 31*60*24)
+    max_queue_length = config.get("max_queue_length", 12*24)  # Default to 24 hours of 5 minute data points
     if not config["test"]:
+        while tochords.waiting() >= 0.90*max_queue_length:
+            logging.info(f"Waiting for queue to drain, current length: {tochords.waiting()}")
+            time.sleep(10)
         tochords.submitURI(uri, max_queue_length)
     time.sleep(config["sleep_secs"])
 
